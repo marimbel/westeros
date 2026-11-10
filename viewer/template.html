@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Westeros — Agent Chronicle</title>
+<style>
+  :root{
+    --bg:#efe6d2; --panel:#f8f2e4; --ink:#2b2418; --muted:#7a6c55; --line:#d6c7a6; --accent:#8b1e1e;
+    --sea:#c9d6d3; --winter:#5b7fa6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+  header{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;padding:18px 24px 10px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:26px;letter-spacing:.06em;font-variant:small-caps}
+  .sub{color:var(--muted)}
+  .winner{margin-left:auto;font-size:15px}
+  .winner b{color:var(--accent)}
+  main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:16px;padding:16px 24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+  .card h2{margin:0 0 8px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  #map{width:100%;height:auto;display:block}
+  .controls{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .controls button{font:inherit;background:var(--ink);color:var(--panel);border:0;border-radius:4px;padding:5px 12px;cursor:pointer}
+  .controls input[type=range]{flex:1;accent-color:var(--accent)}
+  .turn{font-variant-numeric:tabular-nums;min-width:92px}
+  .season{padding:2px 8px;border-radius:10px;font-size:12px;border:1px solid var(--line)}
+  .season.winter{background:var(--winter);color:#fff;border-color:var(--winter)}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:3px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;color:var(--muted);font-weight:600;cursor:pointer}
+  td:first-child,th:first-child{text-align:left}
+  tr.dead td{color:#b3a68c;text-decoration:line-through}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.25)}
+  #feed{max-height:330px;overflow:auto;font-size:13px}
+  #feed div{padding:3px 0;border-bottom:1px dotted var(--line)}
+  #feed .t{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:6px}
+  .ev-battle{} .ev-betrayal,.ev-red_wedding{color:var(--accent);font-weight:600}
+  .ev-throne_seized,.ev-game_over{font-weight:700}
+  .ev-season{color:var(--winter);font-style:italic}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 24px 24px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+  .stat{border:1px solid var(--line);border-radius:4px;padding:6px 8px;background:#fffaf0}
+  .stat .v{font-size:20px}
+  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  svg text{font-family:inherit}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;margin-top:6px}
+  .legend span{cursor:pointer}
+  .legend span.off{opacity:.35}
+  #thoughts div{padding:4px 0;border-bottom:1px dotted var(--line);font-size:13px}
+  @media (max-width:900px){main,.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Westeros</h1>
+  <span class="sub" id="sub"></span>
+  <span class="winner" id="winner"></span>
+</header>
+
+<main>
+  <section class="card">
+    <div class="controls">
+      <button id="play">▶ Play</button>
+      <input type="range" id="slider" min="0" value="0">
+      <span class="turn" id="turnlbl"></span>
+      <span class="season" id="season"></span>
+    </div>
+    <svg id="map" viewBox="160 0 900 800" role="img" aria-label="Map of Westeros and Essos"></svg>
+  </section>
+  <section style="display:flex;flex-direction:column;gap:16px;min-width:0">
+    <div class="card">
+      <h2>Factions</h2>
+      <table id="ftable"></table>
+    </div>
+    <div class="card">
+      <h2>This turn</h2>
+      <div id="feed"></div>
+    </div>
+  </section>
+</main>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Power over time</h2>
+    <svg id="chart" viewBox="0 0 600 260" style="width:100%;height:auto"></svg>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="card">
+    <h2>Relations (current turn)</h2>
+    <svg id="heat" viewBox="0 0 600 510" style="width:100%;height:auto"></svg>
+  </div>
+  <div class="card">
+    <h2>Chronicle metrics</h2>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="card">
+    <h2>Major events</h2>
+    <div id="major" style="max-height:300px;overflow:auto;font-size:13px"></div>
+  </div>
+  <div class="card" id="thoughtsCard" style="display:none;grid-column:1/-1">
+    <h2>Agent reasoning (LLM-played factions)</h2>
+    <div id="thoughts" style="max-height:300px;overflow:auto"></div>
+  </div>
+</div>
+
+<script>
+const DATA=/*__DATA__*/null;
+const W = DATA.world, S = DATA.snapshots, SUM = DATA.summary;
+const F = W.factions, R = W.regions, FIDS = Object.keys(F);
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs={}, parent) => { const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; };
+const name = f => f==="neutral"||!f ? "Unclaimed" : F[f].name;
+const short = f => !f||f==="neutral" ? "—" : F[f].name.replace(/^(House |The )/,"").replace(" of Braavos","");
+const fmt = n => n>=1000 ? (n/1000).toFixed(1)+"k" : Math.round(n);
+
+$("sub").textContent = `Agent chronicle · seed ${DATA.seed} · ${S.length-1} turns · ${FIDS.length} factions`;
+$("winner").innerHTML = SUM.winner ? `Winner: <b>${name(SUM.winner)}</b> — ${SUM.reason}` : "";
+
+// ---------- map
+const map = $("map");
+const gEdges = el("g",{},map), gRegions = el("g",{},map);
+const done = new Set();
+for (const a in W.adjacency) for (const b in W.adjacency[a]) {
+  const k=[a,b].sort().join(); if (done.has(k)) continue; done.add(k);
+  const sea = W.adjacency[a][b]==="sea";
+  el("line",{x1:R[a].x,y1:R[a].y,x2:R[b].x,y2:R[b].y,stroke:sea?"#7fa3a8":"#a8956f","stroke-width":sea?1.5:2.5,
+             "stroke-dasharray":sea?"5 5":"", opacity:.8},gEdges);
+}
+const nodes = {};
+for (const r in R) {
+  const g = el("g",{transform:`translate(${R[r].x},${R[r].y})`},gRegions);
+  const rad = 16 + 2.2*(R[r].food + R[r].gold);
+  const halo = el("circle",{r:rad+5,fill:"none",stroke:"#8b1e1e","stroke-width":0},g);
+  const c = el("circle",{r:rad,stroke:"#2b2418","stroke-width":1.2},g);
+  const crown = R[r].throne ? el("text",{y:-rad-6,"text-anchor":"middle","font-size":15},g) : null;
+  if (crown) crown.textContent = "♛";
+  const t1 = el("text",{y:rad+14,"text-anchor":"middle","font-size":12,"font-weight":600},g); t1.textContent = R[r].seat;
+  const t2 = el("text",{y:rad+27,"text-anchor":"middle","font-size":11,fill:"#7a6c55"},g);
+  const t3 = el("text",{y:4,"text-anchor":"middle","font-size":11,"font-weight":700},g);
+  const title = el("title",{},g);
+  nodes[r] = {c,t2,t3,halo,title};
+}
+const winterWash = el("rect",{x:160,y:0,width:900,height:420,fill:"#5b7fa6",opacity:0,"pointer-events":"none"},map);
+map.insertBefore(winterWash, gEdges);
+
+function textColor(hex){ if(!hex) return "#000"; const n=parseInt(hex.slice(1),16); const l=(0.299*(n>>16)+0.587*(n>>8&255)+0.114*(n&255)); return l>140?"#1d1810":"#fff"; }
+
+// ---------- chart
+const chart = $("chart"); const hidden = new Set();
+const maxP = Math.max(...S.flatMap(s=>Object.values(s.factions).map(f=>f.power)));
+const X = i => 40 + i*(550/Math.max(1,S.length-1)), Y = v => 240 - v*(225/maxP);
+function drawChart(cur){
+  chart.innerHTML="";
+  for (let i=0;i<S.length;i++) if (S[i].season==="winter") el("rect",{x:X(i)-1,y:10,width:550/Math.max(1,S.length-1)+1,height:230,fill:"#5b7fa6",opacity:.12},chart);
+  for (let v=0; v<=maxP; v+= Math.ceil(maxP/4/50)*50){ el("line",{x1:40,x2:590,y1:Y(v),y2:Y(v),stroke:"#d6c7a6"},chart); const t=el("text",{x:34,y:Y(v)+4,"text-anchor":"end","font-size":10,fill:"#7a6c55"},chart); t.textContent=v; }
+  for (const f of FIDS){ if (hidden.has(f)) continue;
+    const pts = S.map((s,i)=>`${X(i)},${Y(s.factions[f].power)}`).join(" ");
+    el("polyline",{points:pts,fill:"none",stroke:F[f].color,"stroke-width":2,opacity:.9},chart); }
+  el("line",{x1:X(cur),x2:X(cur),y1:10,y2:240,stroke:"#8b1e1e","stroke-width":1},chart);
+}
+const legend=$("legend");
+for (const f of FIDS){ const s=document.createElement("span"); s.innerHTML=`<i class="sw" style="background:${F[f].color}"></i>${short(f)}`;
+  s.onclick=()=>{ hidden.has(f)?hidden.delete(f):hidden.add(f); s.classList.toggle("off"); drawChart(+slider.value); }; legend.appendChild(s); }
+
+// ---------- relations heatmap
+function drawHeat(s){
+  const h=$("heat"); h.innerHTML=""; const n=FIDS.length, cell=24, ox=118, oy=96;
+  FIDS.forEach((f,i)=>{ const t=el("text",{x:ox-6,y:oy+i*cell+16,"text-anchor":"end","font-size":11},h); t.textContent=short(f);
+    const t2=el("text",{transform:`translate(${ox+i*cell+15},${oy-6}) rotate(-55)`,"font-size":11},h); t2.textContent=short(f); });
+  const allied = new Set(s.allies.map(p=>p.join("|"))), wed = new Set(s.married.map(p=>p.join("|")));
+  FIDS.forEach((a,i)=>FIDS.forEach((b,j)=>{
+    if (a===b) return; const key=[a,b].sort().join("|"); const v=s.relations[key] ?? 0;
+    const col = v>=0 ? `rgba(46,125,50,${v/100})` : `rgba(139,30,30,${-v/100})`;
+    const r=el("rect",{x:ox+j*cell,y:oy+i*cell,width:cell-2,height:cell-2,fill:col,stroke:allied.has(key)?"#2b2418":"#e6dbc2","stroke-width":allied.has(key)?2:1},h);
+    el("title",{},r).textContent=`${name(a)} ↔ ${name(b)}: ${v}${allied.has(key)?" · allied":""}${wed.has(key)?" · married":""}`;
+    if (wed.has(key)) { const t=el("text",{x:ox+j*cell+11,y:oy+i*cell+16,"text-anchor":"middle","font-size":11},h); t.textContent="♥"; }
+  }));
+  const lg=el("text",{x:ox,y:oy+n*cell+18,"font-size":11,fill:"#7a6c55"},h); lg.textContent="green = friendly · red = hostile · outlined = allied · ♥ = married";
+}
+
+// ---------- events
+const verbs = {
+  battle: e => `${short(e.attacker)} attacked ${R[e.region].seat} (${short(e.defender)}) with ${fmt(e.troops)} — ${e.attacker_won?"<b>conquered</b>":"repelled"}${e.by_sea?" · by sea":""}${e.dragons_lost?` · ${e.dragons_lost} dragon slain`:""}`,
+  betrayal: e => `⚔ ${short(e.by)} betrayed their ally ${short(e.victim)} at ${R[e.region].seat}`,
+  red_wedding: e => `🩸 RED WEDDING: ${short(e.by)} turned on their kin by marriage, ${short(e.victim)}, at ${R[e.region].seat}`,
+  alliance_formed: e => `${short(e.a)} and ${short(e.b)} ${e.marriage?"sealed a marriage pact":"formed an alliance"}`,
+  alliance_broken: e => `${short(e.by)} broke with ${short(e.to)}${e.marriage?" (a marriage!)":""} after ${e.duration} turns`,
+  throne_seized: e => `♛ ${name(e.by)} seized the Iron Throne${e.previous?` from ${short(e.previous)}`:""}`,
+  eliminated: e => `☠ ${name(e.faction)} is no more`,
+  season: e => e.text,
+  trade: e => `${short(e.a)} traded ${JSON.stringify(e.give)} to ${short(e.b)} for ${JSON.stringify(e.get)}`,
+  raid: e => `${short(e.by)} raided ${R[e.region].seat}${e.success?` and carried off ${e.food} food, ${e.gold} gold`:" but was driven off"}`,
+  loan: e => `The Iron Bank lent ${e.amount} gold to ${short(e.borrower)}`,
+  default: e => `${short(e.borrower)} defaulted on ${e.unpaid} gold. The Iron Bank will have its due.`,
+  funding: e => `${short(e.by)} funded ${short(e.to)} with ${e.amount} gold`,
+  sellswords_hired: e => `${short(e.hirer)} hired ${fmt(e.n)} Golden Company swords at ${e.price}/turn`,
+  starvation: e => `${short(e.faction)} starves: ${fmt(e.deserters)} desert`,
+  border_incident: e => `Border incident between ${short(e.a)} and ${short(e.b)} (${e.delta})`,
+  raven: e => `🐦 ${short(e.by)} → ${e.to==="all"?"all":short(e.to)}: “${e.text}”`,
+  dead_retreat: e => `The dead withdraw from ${R[e.region].seat} as the sun returns`,
+  game_over: e => `<b>The chronicle ends: ${name(e.winner)} — ${e.reason}</b>`,
+  loan_repaid: e => `${short(e.borrower)} repaid the Iron Bank`,
+  contract_ended: e => `Golden Company contract with ${short(e.hirer)} ended${e.unpaid?" (unpaid!)":""}`,
+};
+const SHOW = new Set(Object.keys(verbs));
+const MAJOR = new Set(["betrayal","red_wedding","throne_seized","eliminated","season","game_over","default","alliance_broken"]);
+function line(e){ return `<div class="ev-${e.type}"><span class="t">t${e.turn}</span>${verbs[e.type](e)}</div>`; }
+$("major").innerHTML = S.flatMap(s=>s.events).filter(e=>MAJOR.has(e.type)).map(line).join("") || "<i>none</i>";
+
+// ---------- stats
+const stat=(l,v)=>`<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+$("stats").innerHTML = [
+  stat("Battles",SUM.battles), stat("Betrayals",SUM.betrayals), stat("Red Weddings",SUM.red_weddings),
+  stat("Alliances formed",SUM.counts.alliance_formed||0), stat("Alliances broken",SUM.alliances_broken),
+  stat("Mean alliance life",SUM.mean_alliance_duration ?? "—"), stat("Trades",SUM.counts.trade||0),
+  stat("Raids",SUM.counts.raid||0), stat("Starvation turns",SUM.counts.starvation||0),
+  stat("Cooperation index",SUM.cooperation_index), stat("Power Gini start→end",`${SUM.power_gini_start}→${SUM.power_gini_end}`),
+  stat("Survivors",SUM.survivors.length+"/"+FIDS.length),
+].join("");
+
+if (DATA.thoughts && DATA.thoughts.length){
+  $("thoughtsCard").style.display="";
+  $("thoughts").innerHTML = DATA.thoughts.map(t=>`<div><span class="t" style="color:#7a6c55">t${t.turn}</span> <i class="sw" style="background:${F[t.faction].color}"></i><b>${short(t.faction)}</b>: ${t.thoughts}</div>`).join("");
+}
+
+// ---------- faction table
+let sortKey="power";
+function drawTable(s){
+  const rows = FIDS.map(f=>({f,...s.factions[f]})).sort((a,b)=>(b.alive-a.alive)||(b[sortKey]-a[sortKey]));
+  const allies = f => s.allies.filter(p=>p.includes(f)).map(p=>p[0]===f?p[1]:p[0]);
+  const hdr = ["Faction","power","regions","troops","gold","food"].map(k=>`<th data-k="${k}">${k==="Faction"?k:k[0].toUpperCase()+k.slice(1)}${k===sortKey?" ▾":""}</th>`).join("");
+  $("ftable").innerHTML = `<tr>${hdr}</tr>` + rows.map(r=>`<tr class="${r.alive?"":"dead"}" title="${F[r.f].motto} — ${F[r.f].special}${allies(r.f).length?"\nAllies: "+allies(r.f).map(short).join(", "):""}">
+    <td><i class="sw" style="background:${F[r.f].color}"></i>${short(r.f)}${r.dragons?` <span title="dragons">🐉${r.dragons}</span>`:""}</td>
+    <td>${Math.round(r.power)}</td><td>${r.regions}</td><td>${fmt(r.troops)}</td><td>${fmt(r.gold)}</td><td>${fmt(r.food)}</td></tr>`).join("");
+  $("ftable").querySelectorAll("th").forEach(th=>th.onclick=()=>{ if(th.dataset.k!=="Faction"){sortKey=th.dataset.k; render(+slider.value);} });
+}
+
+// ---------- render
+const slider=$("slider"); slider.max=S.length-1;
+function render(i){
+  const s=S[i];
+  $("turnlbl").textContent=`Turn ${s.turn} / ${S.length-1}`;
+  $("season").textContent = s.season==="winter" ? "❄ Winter" : "☀ Summer";
+  $("season").className = "season "+s.season;
+  winterWash.setAttribute("opacity", s.season==="winter"?0.13:0);
+  const fought = new Set(s.events.filter(e=>e.type==="battle").map(e=>e.region));
+  for (const r in R){
+    const o=s.owner[r], n=nodes[r], g=s.garrison[r]||{};
+    const col = o ? F[o].color : "#cfc4ab";
+    n.c.setAttribute("fill", col);
+    n.t3.setAttribute("fill", textColor(o?F[o].color:"#cfc4ab"));
+    const tot = Object.values(g).reduce((a,b)=>a+b,0);
+    n.t3.textContent = tot ? fmt(tot) : "";
+    n.t2.textContent = short(o);
+    n.halo.setAttribute("stroke-width", fought.has(r)?3:0);
+    n.title.textContent = `${R[r].name} (${R[r].seat})\nLord: ${name(o)}\nFood ${R[r].food} · Gold ${R[r].gold} · Defense ×${R[r].defense}\n` +
+      Object.entries(g).map(([k,v])=>`  ${name(k)}: ${v}`).join("\n");
+  }
+  const evs = s.events.filter(e=>SHOW.has(e.type) && e.type!=="border_incident" || MAJOR.has(e.type));
+  $("feed").innerHTML = evs.length ? evs.map(line).join("") : "<i class='sub'>A quiet turn.</i>";
+  drawTable(s); drawChart(i); drawHeat(s);
+}
+slider.oninput=()=>render(+slider.value);
+let timer=null;
+$("play").onclick=()=>{
+  if (timer){ clearInterval(timer); timer=null; $("play").textContent="▶ Play"; return; }
+  if (+slider.value>=S.length-1) slider.value=0;
+  $("play").textContent="❚❚ Pause";
+  timer=setInterval(()=>{ if(+slider.value>=S.length-1){ $("play").click(); return; } slider.value=+slider.value+1; render(+slider.value); }, 450);
+};
+document.addEventListener("keydown",e=>{ if(e.key==="ArrowRight"){slider.value=Math.min(S.length-1,+slider.value+1);render(+slider.value);} if(e.key==="ArrowLeft"){slider.value=Math.max(0,+slider.value-1);render(+slider.value);} });
+render(0);
+</script>
+</body>
+</html>
