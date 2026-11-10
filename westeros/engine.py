@@ -427,7 +427,7 @@ class WesterosEnv:
         if o == fid or (o is not None and self.allied(fid, o)):
             self.garrison[src][fid] -= n
             self.garrison[dst][fid] += n
-            self.log("move", by=fid, src=src, dst=dst, n=n)
+            self.log("move", by=fid, src=src, dst=dst, n=n, by_sea=edge == "sea")
             return
         # ---- attack
         if self.kind(fid) in ("bank",):
@@ -521,7 +521,7 @@ class WesterosEnv:
             self.f[o]["food"] -= stolen_food; self.f[fid]["food"] += stolen_food
             self.f[o]["gold"] -= stolen_gold; self.f[fid]["gold"] += stolen_gold
         self.shift_rel(fid, o, -20)
-        self.log("raid", by=fid, target=o, region=dst, troops=n, success=att > dfn, losses=loss,
+        self.log("raid", by=fid, target=o, region=dst, src=src, troops=n, by_sea=edge == "sea", success=att > dfn, losses=loss,
                  food=round(stolen_food, 1), gold=round(stolen_gold, 1))
 
     # ---------------------------------------------------------------- economy

@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Westeros — Live Agent World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#e9dcc0; --muted:#a8977a; --panel:#17130f; --panel2:#201a14; --line:#3a2f23; --gold:#d9b25f; --blood:#b3332b; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0b0907;color:var(--ink);font-family:"VT323",ui-monospace,monospace;font-size:18px}
+  #app{display:grid;grid-template-columns:minmax(0,1fr) 330px;grid-template-rows:auto minmax(0,1fr);height:100vh;gap:0}
+  header{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:8px 16px;border-bottom:1px solid var(--line);background:linear-gradient(#1a140f,#110d0a)}
+  h1{font-family:Cinzel,serif;font-weight:700;letter-spacing:.18em;font-size:22px;margin:0;color:var(--gold)}
+  .tag{color:var(--muted);font-size:17px}
+  .hud{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:20px}
+  .pill{padding:1px 10px;border:1px solid var(--line);border-radius:3px;background:var(--panel2)}
+  .pill.winter{background:#2c4660;border-color:#5b7fa6;color:#eaf4ff}
+  #stage{position:relative;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;background:#0b0907;overflow:hidden}
+  #cv{display:block;max-width:100%;max-height:100%;cursor:crosshair}
+  aside{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .box{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .box h2{margin:0 0 6px;font-family:Cinzel,serif;font-size:12px;letter-spacing:.2em;color:var(--muted);font-weight:500}
+  .ctrls{display:flex;flex-wrap:wrap;gap:6px}
+  button{font-family:inherit;font-size:18px;background:#2a2119;color:var(--ink);border:1px solid #4a3c2c;border-radius:3px;padding:2px 10px;cursor:pointer}
+  button:hover{background:#3a2e22} button.on{background:var(--gold);color:#1a130c;border-color:var(--gold)}
+  button:disabled{opacity:.45;cursor:default}
+  #mode{margin-top:6px;color:var(--muted);font-size:16px}
+  #flist{overflow:auto;max-height:38vh}
+  .fr{display:grid;grid-template-columns:22px 1fr auto auto;gap:6px;align-items:center;padding:1px 0}
+  .fr img{width:18px;height:24px;image-rendering:pixelated}
+  .fr .n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fr .v{color:var(--muted);text-align:right;min-width:48px}
+  .fr.dead{opacity:.35;text-decoration:line-through}
+  .sw{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:1px}
+  #ticker{flex:1;overflow:auto;padding:8px 12px;font-size:17px;line-height:1.2}
+  #ticker div{padding:2px 0;border-bottom:1px dotted #2c241b}
+  #ticker .t{color:#7d6d55;margin-right:6px}
+  #ticker .major{color:var(--gold)} #ticker .blood{color:#ff7a6b} #ticker .ice{color:#9cc8ff}
+  #banner{position:absolute;top:7%;left:50%;transform:translateX(-50%);pointer-events:none;text-align:center;
+          font-family:Cinzel,serif;font-weight:700;font-size:clamp(18px,2.6vw,34px);letter-spacing:.08em;color:#f3e2b8;
+          text-shadow:0 2px 0 #000,0 0 18px rgba(0,0,0,.9);opacity:0;transition:opacity .35s}
+  #banner small{display:block;font-family:"VT323",monospace;font-size:.6em;letter-spacing:.02em;color:#d8c49a;font-weight:400}
+  #tip{position:absolute;pointer-events:none;background:rgba(18,14,10,.94);border:1px solid #4a3c2c;padding:6px 9px;font-size:16px;line-height:1.15;display:none;max-width:260px;z-index:3}
+  #tip b{font-family:Cinzel,serif;font-size:13px;color:var(--gold)}
+  #loading{position:absolute;bottom:12px;left:12px;font-size:16px;color:var(--muted);background:rgba(10,8,6,.8);padding:3px 8px;border:1px solid var(--line)}
+  @media (max-width:900px){ #app{grid-template-columns:1fr;grid-template-rows:auto auto auto;height:auto} #stage{height:60vw} aside{border-left:0} }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>WESTEROS</h1><span class="tag">a live multi-agent world</span>
+    <div class="hud">
+      <span id="turn" class="pill">Turn 0</span>
+      <span id="season" class="pill">☀ Summer</span>
+      <span id="throne" class="pill">♛ —</span>
+    </div>
+  </header>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="banner"></div>
+    <div id="tip"></div>
+    <div id="loading">Loading the live engine…</div>
+  </div>
+  <aside>
+    <div class="box">
+      <h2>CONTROLS</h2>
+      <div class="ctrls">
+        <button id="play">❚❚ Pause</button>
+        <button data-sp="0.5">½×</button><button data-sp="1" class="on">1×</button><button data-sp="2">2×</button><button data-sp="4">4×</button>
+        <button id="new" disabled>⚔ New live chronicle</button>
+      </div>
+      <div id="mode">Playing a recorded chronicle…</div>
+    </div>
+    <div class="box">
+      <h2>THE GREAT HOUSES &amp; POWERS</h2>
+      <div id="flist"></div>
+    </div>
+    <div id="ticker"></div>
+  </aside>
+</div>
+
+<script>
+const PY_SOURCES = /*__PY__*/null;
+const RECORDED   = /*__REC__*/null;
+const ADJ        = /*__ADJ__*/null;
+const FACTIONS   = /*__FACTIONS__*/null;
+const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+// ====================================================================== geometry
+const LW = 640, LH = 360, WALL_Y = 64;
+const MAP = {
+  lands_of_always_winter:{x:282,y:30, seat:"Heart of Winter"}, haunted_forest:{x:320,y:47, seat:"Hardhome"},
+  the_wall:{x:282,y:64, seat:"Castle Black"}, the_north:{x:262,y:104, seat:"Winterfell"},
+  the_vale:{x:338,y:168, seat:"The Eyrie"}, riverlands:{x:272,y:178, seat:"Riverrun"},
+  iron_islands:{x:188,y:176, seat:"Pyke"}, westerlands:{x:220,y:212, seat:"Casterly Rock"},
+  crownlands:{x:320,y:218, seat:"King's Landing"}, dragonstone:{x:366,y:203, seat:"Dragonstone"},
+  the_reach:{x:242,y:262, seat:"Highgarden"}, stormlands:{x:336,y:258, seat:"Storm's End"},
+  dorne:{x:326,y:318, seat:"Sunspear"}, braavos:{x:446,y:122, seat:"Braavos"},
+  free_cities:{x:472,y:214, seat:"Pentos"}, dothraki_sea:{x:560,y:182, seat:"Vaes Dothrak"},
+  slavers_bay:{x:578,y:276, seat:"Meereen"},
+};
+const REG = Object.keys(MAP);
+const POLY = {
+  westeros:[[226,64],[205,56],[212,40],[236,26],[268,14],[306,11],[340,18],[358,32],[356,48],[348,64],[352,74],[343,86],[356,96],[348,114],[330,124],[322,138],[304,146],[312,152],[340,149],[364,157],[374,172],[360,184],[342,190],[352,201],[343,212],[336,222],[350,232],[364,245],[360,262],[347,272],[333,282],[322,292],[348,299],[386,304],[398,316],[374,330],[322,335],[272,331],[256,318],[250,302],[232,296],[212,282],[200,263],[206,242],[198,226],[206,210],[213,196],[226,186],[231,171],[240,161],[252,153],[241,146],[226,137],[206,129],[196,113],[206,101],[196,89],[206,77],[214,68]],
+  essos:[[433,108],[446,92],[478,82],[520,78],[566,84],[612,80],[640,84],[640,352],[592,352],[566,334],[552,312],[566,296],[548,286],[530,300],[512,296],[496,280],[478,272],[462,258],[456,238],[446,224],[452,204],[442,188],[450,170],[438,152],[430,134],[426,118]],
+  iron:[[[180,168],[188,163],[195,169],[189,177],[182,175]],[[171,181],[179,177],[184,184],[176,188]],[[190,182],[197,179],[199,187],[191,189]]],
+  dragonstone:[[360,200],[369,197],[373,204],[366,210],[359,207]],
+  bear:[[186,92],[193,88],[196,95],[189,99]],
+  skagos:[[372,100],[380,96],[384,104],[376,108]],
+};
+const ESSOS_REG = ["braavos","free_cities","dothraki_sea","slavers_bay"];
+const BEYOND = ["lands_of_always_winter","haunted_forest"];
+const MAINLAND = REG.filter(r => !ESSOS_REG.includes(r) && !BEYOND.includes(r) && !["the_wall","iron_islands","dragonstone"].includes(r));
+const WEIGHT = {the_north:1.55, the_reach:1.25, dorne:1.3, crownlands:.85, stormlands:.95, the_vale:1.05};
+const BIOME = {
+  lands_of_always_winter:"#dbe6ec", haunted_forest:"#aebfc7", the_wall:"#eef7fb", the_north:"#9fb3bb",
+  the_vale:"#8b98a1", riverlands:"#a4b585", iron_islands:"#5e6872", westerlands:"#a5573f", crownlands:"#b0bf74",
+  dragonstone:"#55575e", the_reach:"#6e9c49", stormlands:"#5b8752", dorne:"#d98a48",
+  braavos:"#c5b08a", free_cities:"#c6ab78", dothraki_sea:"#bea268", slavers_bay:"#cf9d5d",
+};
+const MOUNT = {the_vale:.8, westerlands:.35, lands_of_always_winter:.55, haunted_forest:.2, dorne:.18, the_north:.07, stormlands:.1, free_cities:.08, slavers_bay:.08, iron_islands:.3, dragonstone:.5};
+const TREES = {haunted_forest:.75, the_north:.32, riverlands:.22, the_reach:.25, stormlands:.55, crownlands:.25, westerlands:.1, the_vale:.08, free_cities:.15, braavos:.12};
+const ROADS = [
+  [[282,66],[270,82],[262,104],[258,128],[260,150],[266,170],[284,190],[306,206],[320,218]],
+  [[320,218],[296,236],[268,252],[242,262]], [[320,218],[290,214],[258,212],[220,212]],
+  [[320,218],[328,238],[336,258]], [[336,258],[330,290],[326,318]], [[272,178],[246,196],[220,212]],
+  [[446,122],[460,170],[472,214]], [[472,214],[512,200],[560,182]], [[560,182],[574,230],[578,276]],
+];
+const RIVERS = [
+  [[246,150],[258,166],[272,178],[292,192],[306,200],[318,207]], [[292,158],[292,192]],
+  [[260,200],[290,207],[316,214]], [[302,246],[272,256],[246,268],[224,282],[208,286]],
+  [[500,120],[492,170],[486,220],[500,268],[508,292]],
+];
+const SEAS = [["Sunset Sea",112,196],["The Narrow Sea",404,150],["Summer Sea",452,334],["Shivering Sea",470,40],["Bay of Dragons",530,318]];
+
+// ====================================================================== helpers
+const $ = id => document.getElementById(id);
+function hash(x,y){ let n = Math.imul(x|0,374761393) + Math.imul(y|0,668265263); n = Math.imul(n^(n>>>13),1274126177); return ((n^(n>>>16))>>>0)/4294967296; }
+function vnoise(x,y,s){ const gx=Math.floor(x/s), gy=Math.floor(y/s), fx=x/s-gx, fy=y/s-gy;
+  const a=hash(gx,gy),b=hash(gx+1,gy),c=hash(gx,gy+1),d=hash(gx+1,gy+1); const u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+const rgb = h => [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+const hex = ([r,g,b]) => "#"+[r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");
+const mix = (a,b,t) => { const A=rgb(a),B=rgb(b); return hex(A.map((v,i)=>v+(B[i]-v)*t)); };
+const shade = (a,f) => hex(rgb(a).map(v=>v*f));
+const ease = t => t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+const short = f => !f||f==="neutral" ? "Unclaimed" : FACTIONS[f].name.replace(/^(House |The )/,"").replace(" of Braavos","");
+const fmt = n => n>=1000 ? (n/1000).toFixed(1)+"k" : String(Math.round(n));
+const colorOf = f => f && FACTIONS[f] ? (f==="nights_watch" ? "#3a3a44" : FACTIONS[f].color) : "#8a8378";
+
+// ====================================================================== terrain
+const terrain = document.createElement("canvas"); terrain.width=LW; terrain.height=LH;
+const tg = terrain.getContext("2d");
+let regionAt = null, landKind = null, coastDist = null;
+
+function polyMask(polys){
+  const c=document.createElement("canvas"); c.width=LW; c.height=LH; const x=c.getContext("2d");
+  x.fillStyle="#fff";
+  for (const p of polys){ x.beginPath(); p.forEach(([a,b],i)=> i?x.lineTo(a,b):x.moveTo(a,b)); x.closePath(); x.fill(); }
+  const d=x.getImageData(0,0,LW,LH).data, m=new Uint8Array(LW*LH);
+  for (let i=0;i<m.length;i++) m[i]=d[i*4+3]>127?1:0; return m;
+}
+function nearest(x,y,set){
+  const jx = x + (vnoise(x,y,9)-.5)*14, jy = y + (vnoise(x+99,y+99,9)-.5)*14;
+  let best=null, bd=1e9;
+  for (const r of set){ const d=Math.hypot(jx-MAP[r].x, jy-MAP[r].y)/(WEIGHT[r]||1); if(d<bd){bd=d;best=r;} }
+  return best;
+}
+function buildGeography(){
+  const mW=polyMask([POLY.westeros]), mE=polyMask([POLY.essos]), mI=polyMask(POLY.iron),
+        mD=polyMask([POLY.dragonstone]), mB=polyMask([POLY.bear, POLY.skagos]);
+  regionAt=new Int8Array(LW*LH).fill(-1); landKind=new Uint8Array(LW*LH);
+  for (let y=0;y<LH;y++) for (let x=0;x<LW;x++){
+    const i=y*LW+x; let r=null;
+    if (mW[i]){ if (Math.abs(y-WALL_Y)<=2) r="the_wall"; else if (y<WALL_Y) r=nearest(x,y,BEYOND);
+                else if (y>=298 && x>248) r="dorne"; else r=nearest(x,y,MAINLAND.filter(z=>z!=="dorne" || y>=286)); }
+    else if (mE[i]) r=nearest(x,y,ESSOS_REG);
+    else if (mI[i]) r="iron_islands";
+    else if (mD[i]) r="dragonstone";
+    else if (mB[i]) r="the_north";
+    if (r){ regionAt[i]=REG.indexOf(r); landKind[i]=1; }
+  }
+  // chamfer distance from land, for shallow-water shading
+  coastDist=new Float32Array(LW*LH);
+  for (let i=0;i<coastDist.length;i++) coastDist[i]=landKind[i]?0:99;
+  for (let y=1;y<LH;y++) for (let x=1;x<LW-1;x++){ const i=y*LW+x; coastDist[i]=Math.min(coastDist[i],coastDist[i-1]+1,coastDist[i-LW]+1,coastDist[i-LW-1]+1.4,coastDist[i-LW+1]+1.4); }
+  for (let y=LH-2;y>=0;y--) for (let x=LW-2;x>0;x--){ const i=y*LW+x; coastDist[i]=Math.min(coastDist[i],coastDist[i+1]+1,coastDist[i+LW]+1,coastDist[i+LW+1]+1.4,coastDist[i+LW-1]+1.4); }
+}
+
+function buildTerrain(owner, winter){
+  const img=tg.createImageData(LW,LH), d=img.data;
+  const tint = REG.map(r => owner[r] ? rgb(colorOf(owner[r])) : null);
+  const bio = REG.map(r => rgb(BIOME[r]));
+  const snow=[236,243,247];
+  for (let y=0;y<LH;y++) for (let x=0;x<LW;x++){
+    const i=y*LW+x, o=i*4, ri=regionAt[i]; let c;
+    if (ri<0){
+      const n=vnoise(x,y,14)*.6+vnoise(x,y,5)*.4, cd=coastDist[i];
+      c=[16+n*10, 28+n*12, 36+n*14];
+      if (cd<9){ const t=(1-cd/9)*.75; c=c.map((v,k)=>v+([44,72,80][k]-v)*t); }
+      if (cd>=1 && cd<2) c=[c[0]+16,c[1]+22,c[2]+22];
+      if (hash(x,y)>.997) c=[60,80,88];
+    } else {
+      const sh=.86+.26*vnoise(x,y,7)+.06*(hash(x,y)-.5);
+      c=bio[ri].map(v=>v*sh);
+      if (tint[ri]) c=c.map((v,k)=>v+(tint[ri][k]-v)*.27);
+      if (winter){ const t=Math.max(0, Math.min(.85, (250-y)/220)) * (.75+.25*vnoise(x,y,6)) * (x>420 ? .3 : 1); c=c.map((v,k)=>v+(snow[k]-v)*t); }
+      // coastline and borders
+      const nb=[i-1,i+1,i-LW,i+LW];
+      if (nb.some(j=>regionAt[j]<0)) c=[42,32,24];
+      else if (nb.some(j=>regionAt[j]!==ri) && (x+y)%2===0){
+        const other = nb.map(j=>regionAt[j]).find(j=>j!==ri);
+        const diffOwner = owner[REG[ri]] !== owner[REG[other]];
+        c=c.map(v=>v*(diffOwner?.38:.62));
+      }
+    }
+    d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; d[o+3]=255;
+  }
+  tg.putImageData(img,0,0);
+  drawFeatures(winter);
+  drawFrame();
+}
+
+function px(x,y,w,h,c){ tg.fillStyle=c; tg.fillRect(x|0,y|0,w,h); }
+function nearSeat(x,y,r){ return REG.some(k=>Math.abs(MAP[k].x-x)<r && Math.abs(MAP[k].y-y)<r*0.9); }
+function drawFeatures(winter){
+  // rivers
+  for (const line of RIVERS) polyline(line, (x,y)=>px(x,y,1,1, winter?"#9fc3d6":"#3f6e86"), 1);
+  // forests and mountains on a jittered grid
+  for (let gy=4; gy<LH-4; gy+=5) for (let gx=4; gx<LW-4; gx+=6){
+    const x=gx+Math.floor(hash(gx,gy)*5)-2, y=gy+Math.floor(hash(gy,gx)*4)-2, i=y*LW+x, ri=regionAt[i];
+    if (ri<0 || nearSeat(x,y,10)) continue;
+    const r=REG[ri], roll=hash(x*3,y*7);
+    if (MOUNT[r] && roll<MOUNT[r] && !(r==="dorne" && y>312)) mountain(x,y,BIOME[r],winter||BEYOND.includes(r));
+    else if (TREES[r] && roll<(MOUNT[r]||0)+TREES[r]) tree(x,y,r,winter);
+    else if (r==="dorne" && roll<.35) { px(x,y,3,1,"#b46a32"); px(x+1,y-1,2,1,"#e9a868"); }
+    else if (r==="dothraki_sea" && roll<.45) { px(x,y,1,2,"#8c7a3e"); px(x+2,y+1,1,2,"#9a8848"); }
+    else if (r==="lands_of_always_winter" && roll<.5) { px(x,y,1,1,"#ffffff"); }
+  }
+  // roads (golden, dotted), the Wall
+  for (const line of ROADS) polyline(line, (x,y,k)=>{ if(k%3!==2){ px(x,y,1,1,"#e6c66e"); } }, 1);
+  px(214,WALL_Y-1,136,3,"#dff2fb"); px(214,WALL_Y-2,136,1,"#ffffff"); px(214,WALL_Y+2,136,1,"#7fa8bd");
+  for (let x=216;x<350;x+=9) px(x,WALL_Y-3,2,1,"#ffffff");
+  // decor: compass rose and ships on the sea
+  compass(92,298);
+  for (const [x,y] of [[140,110],[128,246],[408,262],[404,78],[600,40]]) decoShip(x,y);
+}
+function polyline(pts, plot, step){
+  let k=0;
+  for (let s=0;s<pts.length-1;s++){ const [x0,y0]=pts[s],[x1,y1]=pts[s+1]; const n=Math.ceil(Math.hypot(x1-x0,y1-y0)/step);
+    for (let j=0;j<n;j++){ const t=j/n; const wob=Math.sin((s*7+j)*.6)*.7; plot(Math.round(x0+(x1-x0)*t+wob), Math.round(y0+(y1-y0)*t), k++); } }
+}
+function mountain(x,y,base,snowy){
+  const L=mix(base,"#ffffff",.35), D=shade(base,.5), O="#2a2118";
+  px(x-3,y+2,7,1,O); px(x-2,y+1,2,1,L); px(x,y+1,3,1,D); px(x-1,y,1,1,L); px(x,y,2,1,D);
+  px(x,y-1,1,1,L); px(x,y-2,1,1,O); px(x-1,y-1,1,1,O); px(x+1,y-1,1,1,O);
+  if (snowy){ px(x,y-1,1,1,"#ffffff"); px(x-1,y,2,1,"#f2f7fa"); }
+}
+function tree(x,y,r,winter){
+  const north = ["haunted_forest","the_north"].includes(r);
+  const G = north ? "#2f4a44" : (r==="stormlands"?"#2d5232":"#35582f"), GL = north?"#4d6b63":"#4e7a3e";
+  px(x,y-2,1,1,G); px(x-1,y-1,3,1,GL); px(x-1,y,3,1,G); px(x,y+1,1,1,"#4a3320");
+  if (winter||r==="haunted_forest") { px(x,y-2,1,1,"#e9f2f6"); px(x-1,y-1,1,1,"#e9f2f6"); }
+}
+function compass(cx,cy){
+  const R=24; tg.save(); tg.translate(cx,cy);
+  tg.strokeStyle="#8f7748"; tg.lineWidth=1; tg.beginPath(); tg.arc(0,0,R-6,0,Math.PI*2); tg.stroke();
+  tg.beginPath(); tg.arc(0,0,R-9,0,Math.PI*2); tg.stroke();
+  for (let k=0;k<8;k++){ const a=k*Math.PI/4, L=k%2?R-8:R, w=k%2?3:4;
+    tg.fillStyle = k%2 ? "#6f5b34" : "#c9a95e";
+    tg.beginPath(); tg.moveTo(Math.cos(a)*L,Math.sin(a)*L); tg.lineTo(Math.cos(a+Math.PI/2)*w,Math.sin(a+Math.PI/2)*w);
+    tg.lineTo(0,0); tg.closePath(); tg.fill();
+    tg.fillStyle = k%2 ? "#4e3f22" : "#8f7440";
+    tg.beginPath(); tg.moveTo(Math.cos(a)*L,Math.sin(a)*L); tg.lineTo(Math.cos(a-Math.PI/2)*w,Math.sin(a-Math.PI/2)*w);
+    tg.lineTo(0,0); tg.closePath(); tg.fill(); }
+  tg.fillStyle="#e2c77d"; tg.fillRect(-1,-1,2,2); tg.restore();
+}
+function decoShip(x,y){ px(x-4,y,9,2,"#4a3020"); px(x-3,y+2,7,1,"#2e1e14"); px(x,y-6,1,6,"#2e1e14"); px(x-3,y-5,6,4,"#b9ab8a"); px(x-3,y-5,6,1,"#d8ccad"); }
+function drawFrame(){
+  for (let y=0;y<LH;y++) for (let x=0;x<LW;x++){
+    const e=Math.min(x,y,LW-1-x,LH-1-y);
+    if (e<7){ const n=vnoise(x,y,4), burn = e<1.5 + n*1.5;
+      const c = burn ? "#2a1b0e" : mix("#7a5a30","#c9a66a", Math.min(1,(e/7)*.7+n*.4));
+      px(x,y,1,1,c); }
+    else if (e<8) px(x,y,1,1,"#1c140c");
+  }
+}
+
+// ====================================================================== sprites
+const SPR = {};
+function mk(w,h,fn){ const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d");
+  fn((a,b,cw,ch,col)=>{ x.fillStyle=col; x.fillRect(a,b,cw,ch); }); return c; }
+const K="#120d09", STEEL="#aab4be", SHINE="#eef3f6", SKIN="#e8b48c", BELT="#5a3a22", LEG="#565e68", WOOD="#6b4a2b";
+function knight(c,f){ const cd=shade(c,.55), cl=mix(c,"#ffffff",.38); return mk(12,16,r=>{
+  r(10,2,1,12,WOOD); r(10,0,1,3,SHINE); r(9,1,3,1,SHINE);
+  r(5,0,2,1,c); r(4,1,4,1,K); r(3,2,1,3,K); r(8,2,1,3,K); r(4,2,4,3,STEEL); r(4,2,2,1,SHINE); r(4,3,4,1,K); r(4,5,4,1,SKIN);
+  r(2,6,8,6,K); r(3,6,6,5,c); r(3,6,6,1,cl); r(5,7,2,3,cd); r(3,10,6,1,BELT);
+  r(9,7,1,3,STEEL);
+  r(0,6,4,6,K); r(1,7,2,4,cl); r(1,8,2,2,c);
+  if(!f){ r(3,11,2,4,LEG); r(7,11,2,3,LEG); r(3,15,2,1,K); r(7,14,2,1,K); }
+  else  { r(3,11,2,3,LEG); r(7,11,2,4,LEG); r(3,14,2,1,K); r(7,15,2,1,K); } }); }
+function crow(c,f){ return mk(12,16,r=>{
+  const CL="#1d1d24", CH="#383844";
+  r(10,4,1,7,"#d3dadf"); r(9,10,3,1,"#8a6a3a"); r(10,11,1,2,"#5a3a22");
+  r(3,0,6,1,K); r(2,1,8,5,CL); r(4,2,4,3,SKIN); r(4,2,4,1,"#3b2a1d"); r(4,3,1,1,K); r(7,3,1,1,K); r(4,5,4,1,"#3b2a1d");
+  r(1,6,10,8,K); r(2,6,8,7,CL); r(3,6,1,6,CH); r(6,7,1,5,CH);
+  if(!f){ r(3,13,2,2,"#2a2018"); r(7,13,2,1,"#2a2018"); } else { r(3,13,2,1,"#2a2018"); r(7,13,2,2,"#2a2018"); }
+  r(2,15,3,1,K); r(7,15-f,3,1,K); }); }
+function wildling(c,f){ return mk(12,16,r=>{
+  const FUR="#6d4c35", FL="#9b7a5a", BEARD="#a2552c";
+  r(9,1,1,13,WOOD); r(8,1,3,3,"#c9d0d6"); r(8,1,1,3,K);
+  r(3,0,6,1,K); r(2,1,8,4,FL); r(4,2,4,3,SKIN); r(4,3,1,1,K); r(7,3,1,1,K); r(3,4,6,3,BEARD);
+  r(1,6,10,7,K); r(2,6,8,6,FUR); r(2,6,8,1,FL); r(4,8,4,1,FL); r(3,11,6,1,"#3d2a1c");
+  if(!f){ r(3,12,2,3,"#4a3526"); r(7,12,2,2,"#4a3526"); r(3,15,2,1,K); r(7,14,2,1,K); }
+  else  { r(3,12,2,2,"#4a3526"); r(7,12,2,3,"#4a3526"); r(3,14,2,1,K); r(7,15,2,1,K); } }); }
+function wight(c,f){ return mk(12,16,r=>{
+  const B="#c7d6de", BD="#8ea4b0", EYE="#6ff0ff", RAG="#33424a";
+  r(4,0,4,4,B); r(3,1,1,2,B); r(8,1,1,2,B); r(4,2,1,1,EYE); r(7,2,1,1,EYE); r(5,4,2,1,BD);
+  r(5,5,2,6,BD); r(3,5,6,1,B); r(3,7,6,1,B); r(3,9,6,1,B); r(3,10,6,2,RAG);
+  r(2,5,1,5,B); r(9,5,1,4,B); r(10,4,1,2,B); r(1,9,1,2,"#9fd8ff");
+  if(!f){ r(4,12,1,3,B); r(7,12,1,2,B); r(3,15,2,1,BD); r(7,14,2,1,BD); }
+  else  { r(4,12,1,2,B); r(7,12,1,3,B); r(3,14,2,1,BD); r(7,15,2,1,BD); } }); }
+function rider(c,f){ const cl=mix(c,"#ffffff",.3); return mk(16,16,r=>{
+  const HB="#7b4a2b", HL="#99633c", HD="#4a2b18", SK="#b97a4e", HAIR="#1a1210";
+  r(0,8,2,4,HD); r(2,8,10,4,HB); r(2,8,10,1,HL); r(11,5,3,5,HB); r(12,3,4,3,HB); r(15,4,1,2,HD); r(13,4,1,1,K); r(11,3,2,4,HD);
+  const legs = f ? [[3,12,4],[5,12,3],[9,12,3],[11,12,4]] : [[3,12,3],[5,12,4],[9,12,4],[11,12,3]];
+  legs.forEach(([x,y,h])=>{ r(x,y,1,h,HD); r(x,y+h,1,1,K); });
+  r(5,8,4,3,c); r(5,8,4,1,cl);
+  r(6,2,3,6,SK); r(6,1,3,2,HAIR); r(5,2,1,7,HAIR); r(7,3,1,1,K); r(6,7,3,1,c); r(7,8,1,3,"#3a2a1e");
+  r(9,4,1,3,"#d0d6da"); r(10,3,1,2,"#d0d6da"); r(9,7,1,1,"#5a3a22"); }); }
+function dragon(f){ return mk(26,18,r=>{
+  const DB="#2b1016", DH="#4a1b24", BEL="#b84a31", WM="#6e2630", WD="#3a141b";
+  r(3,10,5,2,DB); r(1,11,2,1,DB); r(0,10,1,1,DB);
+  r(8,8,10,4,DB); r(8,8,10,1,DH); r(9,11,8,1,BEL);
+  r(17,6,3,3,DB); r(19,4,5,3,DB); r(20,7,4,1,BEL); r(21,5,1,1,"#ffcc33"); r(19,3,1,1,DH); r(22,3,1,1,DH);
+  r(10,12,1,2,DB); r(15,12,1,2,DB);
+  if(!f){ for(let i=0;i<7;i++) r(9+i,1+i,8-i,1, i%2?WM:WD); r(9,0,1,2,K); }
+  else  { for(let i=0;i<6;i++) r(9+i,11+i,7-i,1, i%2?WM:WD); r(9,16,1,1,K); } }); }
+function ship(c){ const cl=mix(c,"#ffffff",.35); return mk(16,13,r=>{
+  r(1,9,14,3,"#5b3a22"); r(1,9,14,1,"#7a5230"); r(2,12,12,1,"#3a2416"); r(0,8,2,2,"#5b3a22"); r(14,8,2,2,"#5b3a22");
+  r(7,1,1,9,"#3a2416"); r(3,2,9,6,c); r(3,2,9,1,cl); r(3,7,9,1,shade(c,.6)); r(8,0,3,1,c); }); }
+function raven(f){ return mk(7,5,r=>{ r(2,2,3,2,"#111"); r(5,2,1,1,"#111"); r(6,2,1,1,"#c9a43a");
+  if(!f){ r(0,0,3,2,"#1d1d1d"); r(4,0,2,2,"#1d1d1d"); } else { r(0,3,3,2,"#1d1d1d"); r(4,3,2,2,"#1d1d1d"); } }); }
+const castleImg = mk(13,12,r=>{
+  const S="#8d9196", SD="#5d6166", SL="#b9bdc1";
+  r(0,5,13,7,K); r(1,6,11,5,S); r(1,6,11,1,SL); for(let x=0;x<13;x+=3) r(x,4,2,2,K), r(x,5,2,1,S);
+  r(4,1,5,5,K); r(5,2,3,4,S); r(5,2,3,1,SL); r(4,0,1,1,K); r(6,0,1,1,K); r(8,0,1,1,K);
+  r(5,8,3,3,"#2a1d14"); r(6,3,1,1,K); r(2,7,1,1,SD); r(10,7,1,1,SD); });
+function unitType(f){ const k=FACTIONS[f]?.kind; return {order:"crow",tribe:"wild",undead:"wight",horde:"rider"}[k] || "knight"; }
+function sprite(f, frame){
+  const key=f+":"+frame; if (SPR[key]) return SPR[key];
+  const c = f==="neutral" ? "#9a9488" : colorOf(f), t=unitType(f);
+  return SPR[key] = ({knight, crow, wild:wildling, wight, rider})[t](c, frame);
+}
+const DRAGON=[dragon(0),dragon(1)], RAVEN=[raven(0),raven(1)], SHIPS={};
+const shipOf = f => SHIPS[f] || (SHIPS[f]=ship(colorOf(f)));
+
+// ====================================================================== state & playback
+const cv=$("cv"), ctx=cv.getContext("2d");
+const low=document.createElement("canvas"); low.width=LW; low.height=LH; const g=low.getContext("2d");
+let cur=null, pend=null, anim=null, speed=1, playing=true, fetching=false, source=null, now=0, finished=false;
+let effects=[], snow=[], terrainKey="";
+const SEA = (a,b) => ADJ[a] && ADJ[a][b]==="sea";
+
+function capital(f, st){ let best=null,bn=-1; for (const r of REG){ if (st.owner[r]===f){ const n=(st.garrison[r]||{})[f]||0; if(n>bn){bn=n;best=r;} } } return best; }
+function pathPoint(a,b,t,sea){
+  const A=MAP[a], B=MAP[b];
+  if (a===b) return {x:A.x, y:A.y};
+  if (!sea) return {x:A.x+(B.x-A.x)*t, y:A.y+(B.y-A.y)*t};
+  const mx=(A.x+B.x)/2, my=(A.y+B.y)/2, dx=B.x-A.x, dy=B.y-A.y, L=Math.hypot(dx,dy);
+  const side = (A.x+B.x)/2 < 300 ? -1 : 1, cx=mx+(-dy/L)*L*.28*side, cy=my+(dx/L)*L*.28*side;
+  const u=1-t; return {x:u*u*A.x+2*u*t*cx+t*t*B.x, y:u*u*A.y+2*u*t*cy+t*t*B.y};
+}
+
+function startTurn(f){
+  pend=f;
+  const marchers=[], ravens=[], links=[];
+  let dragonUsed=false;
+  for (const e of f.events){
+    if (e.type==="move") marchers.push({f:e.by, a:e.src, b:e.dst, n:e.n, sea:e.by_sea||SEA(e.src,e.dst), kind:"move"});
+    else if (e.type==="battle"){
+      const m={f:e.attacker, a:e.src, b:e.region, n:e.troops, sea:e.by_sea||SEA(e.src,e.region), kind:"attack", won:e.attacker_won, def:e.defender};
+      if (!dragonUsed && cur.factions.targaryen && cur.factions.targaryen.dragons>0 && (e.attacker==="targaryen"||e.defender==="targaryen")){ m.dragon=true; dragonUsed=true; }
+      marchers.push(m);
+    }
+    else if (e.type==="raid") marchers.push({f:e.by, a:e.src||e.region, b:e.region, n:e.troops, sea:e.by_sea, kind:"raid", won:e.success});
+    else if (e.type==="raven" && e.to!=="all" && ravens.length<6){ const a=capital(e.by,cur), b=capital(e.to,cur); if(a&&b&&a!==b) ravens.push({a,b}); }
+    else if (e.type==="recruit") effects.push({type:"plus", x:MAP[e.region].x, y:MAP[e.region].y-8, t0:now, dur:900, c:colorOf(e.by)});
+  }
+  const fights = marchers.some(m=>m.kind!=="move");
+  const D = { march: marchers.length||ravens.length ? 1300 : 0, clash: fights ? 750 : 0, settle: marchers.length ? 260 : 380 };
+  anim={t0:now, marchers, ravens, D, applied:false};
+  // season banner shows immediately
+  for (const e of f.events) if (e.type==="season") banner(e.season==="winter" ? "❄ Winter has come" : "☀ Spring returns", e.season==="winter" ? "The Long Night stirs beyond the Wall" : "The snows recede");
+}
+
+function applyTurn(){
+  const prev=cur; cur=pend; pend=null;
+  for (const e of cur.events){
+    if (e.type==="battle"){
+      const p=MAP[e.region]; for (let k=0;k<(e.attacker_won?26:8);k++) effects.push({type:"spark", x:p.x+(Math.random()-.5)*10, y:p.y-4+(Math.random()-.5)*8, vx:(Math.random()-.5)*40, vy:-Math.random()*40, t0:now, dur:700, c:e.attacker_won?colorOf(e.attacker):"#ddd"});
+    }
+    if (e.type==="alliance_formed"||e.type==="betrayal"||e.type==="red_wedding"||e.type==="trade"){
+      const A=e.a||e.by, B=e.b||e.victim, a=capital(A,cur)||capital(A,prev), b=capital(B,cur)||capital(B,prev);
+      if (a&&b) effects.push({type:"link", a, b, t0:now, dur:1600, c: e.type==="alliance_formed" ? (e.marriage?"#ff8fb0":"#ffd76a") : e.type==="trade" ? "#9fe08a" : "#ff4a3a", icon: e.type==="alliance_formed" ? (e.marriage?"♥":"✦") : e.type==="trade" ? "⚖" : "†"});
+    }
+    if (e.type==="throne_seized") banner(`♛ ${FACTIONS[e.by].name} seizes the Iron Throne`, e.previous ? `wresting it from ${short(e.previous)}` : "");
+    if (e.type==="betrayal") banner(`⚔ Betrayal!`, `${short(e.by)} turns on ${short(e.victim)}`);
+    if (e.type==="red_wedding") banner(`🩸 A Red Wedding`, `${short(e.by)} slaughters their kin ${short(e.victim)}`);
+    if (e.type==="eliminated") banner(`☠ ${FACTIONS[e.faction].name} is no more`, FACTIONS[e.faction].motto);
+    if (e.type==="game_over") banner(`${FACTIONS[e.winner].name} prevails`, e.reason);
+  }
+  const key = JSON.stringify(cur.owner)+cur.season;
+  if (key!==terrainKey){ buildTerrain(cur.owner, cur.season==="winter"); terrainKey=key; }
+  ticker(cur); hud(cur);
+  if (cur.done){ finished=true; $("mode").textContent += " — chronicle complete."; }
+}
+
+// ====================================================================== banners, ticker, HUD
+const bannerQ=[]; let bannerBusy=false;
+function banner(title, sub){ bannerQ.push([title,sub]); if(!bannerBusy) nextBanner(); }
+function nextBanner(){ const b=bannerQ.shift(); if(!b){bannerBusy=false; return;} bannerBusy=true;
+  const el=$("banner"); el.innerHTML=`${b[0]}<small>${b[1]||""}</small>`; el.style.opacity=1;
+  setTimeout(()=>{ el.style.opacity=0; setTimeout(nextBanner, 380); }, Math.max(900, 2300/speed)); }
+const V = {
+  battle:e=>[`${short(e.attacker)} ${e.attacker_won?"takes":"fails to take"} ${MAP[e.region].seat}${e.by_sea?" by sea":""}`, e.attacker_won?"major":""],
+  betrayal:e=>[`${short(e.by)} betrays ${short(e.victim)}!`,"blood"], red_wedding:e=>[`RED WEDDING — ${short(e.by)} murders ${short(e.victim)}`,"blood"],
+  alliance_formed:e=>[`${short(e.a)} & ${short(e.b)} ${e.marriage?"wed":"ally"}`,""], alliance_broken:e=>[`${short(e.by)} breaks with ${short(e.to)}`,"blood"],
+  throne_seized:e=>[`♛ ${short(e.by)} seizes the Iron Throne`,"major"], eliminated:e=>[`☠ ${short(e.faction)} destroyed`,"blood"],
+  season:e=>[e.text,"ice"], trade:e=>[`${short(e.a)} trades with ${short(e.b)}`,""], raid:e=>[`${short(e.by)} raids ${MAP[e.region].seat}${e.success?"":" (repelled)"}`,""],
+  loan:e=>[`Iron Bank lends ${e.amount}g to ${short(e.borrower)}`,""], default:e=>[`${short(e.borrower)} defaults — the Bank will have its due`,"blood"],
+  sellswords_hired:e=>[`${short(e.hirer)} hires ${fmt(e.n)} sellswords`,""], funding:e=>[`${short(e.by)} funds ${short(e.to)} (${e.amount}g)`,""],
+  dead_retreat:e=>[`The dead withdraw from ${MAP[e.region].seat}`,"ice"], game_over:e=>[`${short(e.winner)} prevails — ${e.reason}`,"major"],
+  raven:e=>[`🐦 ${short(e.by)}→${e.to==="all"?"all":short(e.to)}: “${e.text}”`,""],
+};
+function ticker(st){
+  const box=$("ticker"); const lines=st.events.filter(e=>V[e.type]).map(e=>{ const [t,c]=V[e.type](e); return `<div class="${c}"><span class="t">t${st.turn}</span>${t}</div>`; });
+  if (lines.length){ box.insertAdjacentHTML("afterbegin", lines.reverse().join("")); while (box.children.length>160) box.lastChild.remove(); }
+}
+const miniCache={};
+function mini(f){ return miniCache[f] || (miniCache[f]=sprite(f,0).toDataURL()); }
+function hud(st){
+  $("turn").textContent=`Turn ${st.turn}`;
+  const w=st.season==="winter"; $("season").textContent = w?"❄ Winter":"☀ Summer"; $("season").className="pill"+(w?" winter":"");
+  const t=st.owner.crownlands; $("throne").innerHTML = `♛ <span class="sw" style="background:${colorOf(t)}"></span>${short(t)}`;
+  const rows=Object.keys(FACTIONS).map(f=>({f,...st.factions[f]})).sort((a,b)=>(b.alive-a.alive)||(b.power-a.power));
+  $("flist").innerHTML = rows.map(r=>`<div class="fr ${r.alive?"":"dead"}" title="${FACTIONS[r.f].motto}"><img src="${mini(r.f)}" alt=""><span class="n"><span class="sw" style="background:${colorOf(r.f)}"></span>${short(r.f)}${r.dragons?" 🐉"+r.dragons:""}</span><span class="v">${fmt(r.troops)}⚔</span><span class="v">${r.regions}▣</span></div>`).join("");
+}
+
+// ====================================================================== rendering
+function drawSprite(img, x, y, flip, alpha){
+  g.save(); if (alpha!==undefined) g.globalAlpha=alpha;
+  if (flip){ g.translate(Math.round(x)+img.width, Math.round(y)); g.scale(-1,1); g.drawImage(img,0,0); }
+  else g.drawImage(img, Math.round(x), Math.round(y));
+  g.restore();
+}
+const frameOf = (ms=160) => Math.floor(now/ms)%2;
+
+function drawWorld(){
+  g.drawImage(terrain,0,0);
+  const st=cur, wf=frameOf(400);
+  // castles + flags + garrisons
+  for (const r of REG){
+    const p=MAP[r], o=st.owner[r], gar=st.garrison[r]||{};
+    if (r==="lands_of_always_winter"){ if (o==="white_walkers"){ g.fillStyle="rgba(140,220,255,.35)"; g.fillRect(p.x-7,p.y-12,14,14); } }
+    g.drawImage(castleImg, p.x-6, p.y-11);
+    const fc = colorOf(o||"neutral"); g.fillStyle="#2a1d14"; g.fillRect(p.x, p.y-19, 1, 9);
+    g.fillStyle=fc; g.fillRect(p.x+1, p.y-19+(wf?0:1), 5, 3); g.fillRect(p.x+1, p.y-18, 4+(wf?1:0), 2);
+    const entries = Object.entries(gar).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+    const slots=[[-19,0],[8,0],[-27,2],[16,2]]; let s=0;
+    for (const [k,v] of entries){
+      const cnt = v<400?1: v<1500?2: v<3500?3:4;
+      for (let j=0;j<cnt && s<slots.length;j++,s++){
+        const [ox,oy]=slots[s], bob = Math.floor((now/500 + hash(s,REG.indexOf(r)))%2);
+        drawSprite(sprite(k, 0), p.x+ox-6, p.y+oy-15+ (bob?0:0), ox>0);
+      }
+    }
+  }
+  // idle dragons circling the Targaryen capital
+  const tg_ = st.factions.targaryen;
+  if (tg_ && tg_.alive && tg_.dragons>0 && !(anim && anim.marchers.some(m=>m.dragon))){
+    const cap=capital("targaryen",st);
+    if (cap) for (let k=0;k<tg_.dragons;k++){ const a=now/1400+k*2.1, p=MAP[cap];
+      drawSprite(DRAGON[frameOf(220)], p.x-13+Math.cos(a)*22, p.y-34+Math.sin(a)*8-k*4, Math.sin(a)>0); }
+  }
+  // marching armies
+  if (anim){
+    const el=now-anim.t0, {march,clash}=anim.D;
+    for (const m of anim.marchers){
+      let t, alpha, back=false;
+      if (el<march) t=ease(el/march);
+      else if (m.kind==="move" || (m.kind==="attack" && m.won)) { t=1; alpha = el<march+clash ? 1 : 0; }
+      else { const u=Math.min(1,(el-march)/Math.max(1,clash)); t=1-ease(u)*0.85; back=true; alpha=1-u*.7; }
+      if (alpha===0) continue;
+      const p=pathPoint(m.a,m.b,t,m.sea), q=pathPoint(m.a,m.b,Math.min(1,t+.02),m.sea);
+      const flip = back ? (q.x>p.x) : (q.x<p.x);
+      if (m.sea && t>0.06 && t<0.94){ drawSprite(shipOf(m.f), p.x-8, p.y-11+Math.sin(now/200)*1, flip, alpha); }
+      else {
+        const k = Math.min(3, Math.max(1, Math.ceil(m.n/700))), offs=[[0,0],[-7,3],[7,3]];
+        const fighting = el>=march && el<march+clash && m.kind!=="move";
+        for (let j=0;j<k;j++){ const [ox,oy]=offs[j]; const jit = fighting ? (Math.random()-.5)*2 : 0;
+          const spr = sprite(m.f, fighting ? frameOf(90) : frameOf(140));
+          drawSprite(spr, p.x+ox-6+jit, p.y+oy-16, flip, alpha); }
+      }
+      if (m.dragon){ const df=frameOf(160); const fy = p.y-40 + Math.sin(now/300)*3;
+        drawSprite(DRAGON[df], p.x-13, fy, flip);
+        if (el>=march && el<march+clash){ for (let k=0;k<10;k++){ g.fillStyle=["#ffdd55","#ff8a2a","#e3401f"][k%3]; g.fillRect(p.x + (flip?-6:10) + (flip?-k*2:k*2)*0.8 - 10*(flip?0:0), fy+12+k*1.6+Math.random()*2, 2, 2); } }
+      }
+      // clash: dust and flashing steel
+      if (el>=march && el<march+clash && m.kind!=="move"){
+        const B=MAP[m.b];
+        for (let k=0;k<7;k++){ const a=hash(k,Math.floor(now/80))*Math.PI*2, rr=4+hash(Math.floor(now/80),k)*8;
+          g.fillStyle = k%3 ? "rgba(196,170,120,.75)" : "#fff7c8"; g.fillRect(B.x+Math.cos(a)*rr, B.y-6+Math.sin(a)*rr*.6, k%3?3:1, k%3?2:1); }
+        if (frameOf(120)){ g.fillStyle="#fff"; g.fillRect(B.x-1,B.y-14,1,5); g.fillRect(B.x-3,B.y-12,5,1); }
+      }
+    }
+    for (const rv of anim.ravens){ const t=Math.min(1,el/Math.max(1,march)); if (t>=1) continue;
+      const A=MAP[rv.a], B=MAP[rv.b]; const x=A.x+(B.x-A.x)*t, y=A.y-26+(B.y-A.y)*t - Math.sin(t*Math.PI)*18;
+      drawSprite(RAVEN[frameOf(120)], x-3, y, B.x<A.x); }
+  }
+  // effects
+  effects = effects.filter(e => now-e.t0 < e.dur);
+  for (const e of effects){
+    const u=(now-e.t0)/e.dur;
+    if (e.type==="plus"){ g.globalAlpha=1-u; g.fillStyle=e.c; const y=e.y-u*8; g.fillRect(e.x+8,y,3,1); g.fillRect(e.x+9,y-1,1,3); g.globalAlpha=1; }
+    else if (e.type==="spark"){ const t=(now-e.t0)/1000; g.globalAlpha=1-u; g.fillStyle=e.c; g.fillRect(e.x+e.vx*t, e.y+e.vy*t+60*t*t, 1, 1); g.globalAlpha=1; }
+    else if (e.type==="link"){ const A=MAP[e.a], B=MAP[e.b]; g.globalAlpha=Math.sin(u*Math.PI); g.fillStyle=e.c;
+      const n=Math.ceil(Math.hypot(B.x-A.x,B.y-A.y)/3); for (let k=0;k<n;k++){ if ((k+Math.floor(now/90))%3) continue; const t=k/n; g.fillRect(A.x+(B.x-A.x)*t, A.y-14+(B.y-A.y)*t - Math.sin(t*Math.PI)*16, 1, 1); }
+      g.globalAlpha=1; }
+  }
+  // winter snow
+  if (st.season==="winter"){
+    if (snow.length<260) for (let k=0;k<6;k++) snow.push({x:Math.random()*LW, y:-2, v:8+Math.random()*16, p:Math.random()*6});
+    g.fillStyle="rgba(255,255,255,.9)";
+    for (const s of snow){ s.y+=s.v/60; s.x+=Math.sin(now/700+s.p)*.25; if (s.y>LH){ s.y=-2; s.x=Math.random()*LW; } g.fillRect(s.x|0, s.y|0, 1, 1); }
+  } else if (snow.length) snow.length=0;
+}
+
+function drawLabels(S){
+  ctx.textAlign="center"; ctx.textBaseline="top";
+  // seas
+  ctx.font=`italic 500 ${Math.max(11,4.6*S)}px Cinzel, serif`; ctx.fillStyle="rgba(178,198,204,.6)";
+  for (const [t,x,y] of SEAS) ctx.fillText(t, x*S, y*S);
+  ctx.font=`700 ${Math.max(14,10*S)}px Cinzel, serif`; ctx.fillStyle="rgba(70,52,30,.4)"; ctx.fillText("ESSOS", 585*S, 116*S);
+  // seats and troop counts
+  for (const r of REG){
+    const p=MAP[r], o=cur.owner[r], gar=cur.garrison[r]||{}, tot=Object.values(gar).reduce((a,b)=>a+b,0);
+    ctx.font=`700 ${Math.max(10,4.4*S)}px Cinzel, serif`;
+    const y=(p.y+3)*S; ctx.lineWidth=Math.max(2,S*.9); ctx.strokeStyle="rgba(15,10,6,.9)"; ctx.strokeText(p.seat, p.x*S, y);
+    ctx.fillStyle = r==="crownlands" ? "#ffe08a" : "#f2e6cc"; ctx.fillText(p.seat, p.x*S, y);
+    if (tot>0){
+      const txt=fmt(tot); ctx.font=`${Math.max(13,5.4*S)}px VT323, monospace`; const w=ctx.measureText(txt).width+S*2.2, h=Math.max(13,5*S);
+      const bx=(p.x+7)*S, by=(p.y-24)*S; ctx.fillStyle=colorOf(o||"neutral"); ctx.fillRect(bx, by, w, h);
+      ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(bx, by+h-S*.6, w, S*.6);
+      ctx.fillStyle = luminance(colorOf(o||"neutral"))>150 ? "#140e08" : "#fff"; ctx.textAlign="left"; ctx.fillText(txt, bx+S*1.1, by+S*.1); ctx.textAlign="center";
+    }
+    if (r==="crownlands"){ ctx.font=`${Math.max(12,5*S)}px serif`; ctx.fillStyle="#ffd25a"; ctx.fillText("♛", (p.x-10)*S, (p.y-26)*S); }
+  }
+  // link icons
+  for (const e of effects) if (e.type==="link"){ const A=MAP[e.a], B=MAP[e.b], u=(now-e.t0)/e.dur;
+    ctx.globalAlpha=Math.sin(u*Math.PI); ctx.font=`${Math.max(14,6*S)}px serif`; ctx.fillStyle=e.c;
+    ctx.fillText(e.icon, (A.x+B.x)/2*S, ((A.y+B.y)/2-30)*S); ctx.globalAlpha=1; }
+}
+const luminance = h => { const [r,g2,b]=rgb(h); return .299*r+.587*g2+.114*b; };
+
+function resize(){
+  const st=$("stage"), dpr=window.devicePixelRatio||1;
+  const w=st.clientWidth, h=st.clientHeight || w*LH/LW; const scale=Math.min(w/LW, h/LH);
+  cv.style.width=Math.floor(LW*scale)+"px"; cv.style.height=Math.floor(LH*scale)+"px";
+  cv.width=Math.floor(LW*scale*dpr); cv.height=Math.floor(LH*scale*dpr);
+}
+window.addEventListener("resize", resize);
+
+function loop(ts){
+  now=ts;
+  if (cur){
+    if (anim){
+      const el=now-anim.t0, D=anim.D;
+      if (!anim.applied && el>=D.march+D.clash){ applyTurn(); anim.applied=true; }
+      if (anim.applied && el>=D.march+D.clash+D.settle) anim=null;
+    }
+    if (!anim && playing && !fetching && !finished && source){
+      fetching=true;
+      Promise.resolve(source.next()).then(f=>{ fetching=false; if (f) startTurn(f); else finished=true; })
+        .catch(err=>{ fetching=false; console.error(err); finished=true; });
+    }
+    drawWorld();
+    const S=cv.width/LW; ctx.imageSmoothingEnabled=false; ctx.drawImage(low,0,0,cv.width,cv.height);
+    drawLabels(S);
+  }
+  requestAnimationFrame(loop);
+}
+// time scaling: run the clock faster/slower than real time
+const realRAF = window.requestAnimationFrame.bind(window); let virt=0, lastReal=null;
+window.requestAnimationFrame = fn => realRAF(ts => { if (lastReal===null) lastReal=ts; virt += (ts-lastReal)*(playing?speed:0) + (playing?0:(ts-lastReal)*0.0001); lastReal=ts; fn(virt); });
+
+// ====================================================================== tooltip
+cv.addEventListener("mousemove", ev=>{
+  if (!regionAt || !cur) return;
+  const rect=cv.getBoundingClientRect(), x=Math.floor((ev.clientX-rect.left)/rect.width*LW), y=Math.floor((ev.clientY-rect.top)/rect.height*LH);
+  const ri=regionAt[y*LW+x], tip=$("tip");
+  if (ri<0 || ri===undefined){ tip.style.display="none"; return; }
+  const r=REG[ri], o=cur.owner[r], gar=cur.garrison[r]||{};
+  tip.innerHTML=`<b>${MAP[r].seat}</b><br>Lord: ${o?FACTIONS[o].name:"Unclaimed"}<br>`+Object.entries(gar).map(([k,v])=>`<span class="sw" style="background:${colorOf(k)}"></span>${short(k)}: ${fmt(v)}`).join("<br>");
+  const sr=$("stage").getBoundingClientRect(); tip.style.display="block";
+  tip.style.left=Math.min(ev.clientX-sr.left+14, sr.width-200)+"px"; tip.style.top=(ev.clientY-sr.top+14)+"px";
+});
+cv.addEventListener("mouseleave", ()=>$("tip").style.display="none");
+
+// ====================================================================== sources: recorded + live (Pyodide)
+function recordedSource(){ let i=1; return { first:()=>RECORDED[0], next:()=> i<RECORDED.length ? RECORDED[i++] : null }; }
+function begin(src, label){
+  source=src; finished=false; anim=null; effects=[]; terrainKey=""; $("ticker").innerHTML="";
+  cur=src.first(); buildTerrain(cur.owner, cur.season==="winter"); terrainKey=JSON.stringify(cur.owner)+cur.season; hud(cur);
+  $("mode").textContent=label;
+}
+let py=null;
+function loadScript(url){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=url; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+async function bootPython(){
+  await loadScript(PYODIDE_URL+"pyodide.js");
+  py = await loadPyodide({indexURL: PYODIDE_URL});
+  py.FS.mkdirTree("/w/westeros/agents");
+  for (const [p,src] of Object.entries(PY_SOURCES)) py.FS.writeFile("/w/"+p, src);
+  py.runPython("import sys; sys.path.insert(0,'/w'); from westeros.live import LiveSession");
+}
+function liveSource(seed){
+  py.runPython(`S = LiveSession(${seed}, 150)`);
+  return { first:()=>JSON.parse(py.runPython("S.first()")), next:()=>JSON.parse(py.runPython("S.step()")) };
+}
+function newLive(){ const seed=Math.floor(Math.random()*100000); begin(liveSource(seed), `LIVE · seed ${seed} · agents deciding in your browser`); playing=true; $("play").textContent="❚❚ Pause"; }
+
+// ====================================================================== controls
+$("play").onclick=()=>{ playing=!playing; $("play").textContent=playing?"❚❚ Pause":"▶ Play"; };
+document.querySelectorAll("[data-sp]").forEach(b=>b.onclick=()=>{ speed=+b.dataset.sp; document.querySelectorAll("[data-sp]").forEach(x=>x.classList.toggle("on",x===b)); });
+$("new").onclick=newLive;
+document.addEventListener("keydown", e=>{ if (e.code==="Space"){ e.preventDefault(); $("play").click(); } });
+
+buildGeography(); resize();
+begin(recordedSource(), "Recorded chronicle (seed 8) — start a live one once the engine loads");
+requestAnimationFrame(loop);
+const bootTimer=setTimeout(()=>{ if(!py) $("loading").textContent="Live engine unavailable — playing the recorded chronicle."; }, 30000);
+bootPython().then(()=>{ clearTimeout(bootTimer); $("new").disabled=false; $("loading").textContent="Live engine ready ✓ — press “New live chronicle”"; setTimeout(()=>$("loading").style.display="none", 6000); })
+  .catch(err=>{ console.warn(err); $("loading").textContent="Live engine unavailable — playing the recorded chronicle."; });
+</script>
+</body>
+</html>

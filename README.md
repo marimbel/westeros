@@ -1,6 +1,9 @@
 # Westeros: a multi-agent training ground
 
-**[Watch a 150-turn chronicle →](https://marimbel.github.io/westeros/)** (replay of seed 8; regenerate with `python run.py --seed 8`)
+**[Watch the live world →](https://marimbel.github.io/westeros/)**: a pixel-art map of Westeros where every army is an
+animated sprite. The real engine runs in your browser (via Pyodide), so each "New live chronicle" is a fresh simulation.
+The **[analysis replay](https://marimbel.github.io/westeros/replay.html)** has charts, a relations heatmap and metrics.
+Rebuild both with `python build_site.py`.
 
 A sandboxed, turn-based world modeled on *Game of Thrones* for studying how agents **cooperate, compete,
 betray, and fight over scarce resources**. Fifteen factions (the nine Great Houses, the Night's Watch,
@@ -112,5 +115,7 @@ westeros/agents/         heuristic.py, llm.py
 westeros/metrics.py      summary statistics
 run.py                   CLI: single runs, batches, ablations, replay export
 viewer/template.html     replay viewer (map, timeline, relations heatmap, event feed)
-docs/index.html          demo replay served by GitHub Pages
+viewer/world_template.html  live pixel-art world (sprites, marching armies, battles, ravens, winter)
+westeros/live.py         step-by-step session used by the browser world
+build_site.py            builds docs/index.html (live world) + docs/replay.html (analysis replay)
 ```
